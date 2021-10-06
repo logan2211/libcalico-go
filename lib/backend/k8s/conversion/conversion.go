@@ -190,24 +190,24 @@ func (c converter) HasIPAddress(pod *kapiv1.Pod) bool {
 	// non-empty if the corresponding singular field is empty.
 }
 
-// getPodIPs extracts the IP addresses from a Kubernetes Pod.  We support a single IPv4 address
-// and/or a single IPv6.  getPodIPs loads the IPs either from the PodIPs and PodIP field, if
-// present, or the calico podIP annotation.
+// getPodIPs extracts the IP addresses from a Kubernetes Pod.
+// getPodIPs loads the IPs either from the calico podIP annotation,
+// if present, or the PodIPs and PodIP field
 func getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
 	var podIPs []string
-	if ips := pod.Status.PodIPs; len(ips) != 0 {
-		log.WithField("ips", ips).Debug("PodIPs field filled in")
+       if ips := pod.Annotations[AnnotationPodIPs]; ips != "" {
+               log.WithField("ips", ips).Debug("PodIPs annotation filled in")
+               podIPs = append(podIPs, strings.Split(ips, ",")...)
+       } else if ip := pod.Annotations[AnnotationPodIP]; ip != "" {
+               log.WithField("ip", ip).Debug("PodIP annotation filled in")
+               podIPs = append(podIPs, ip)
+       } else if ips := pod.Status.PodIPs; len(ips) != 0 {
+               log.WithField("ips", ips).Debug("No Calico annotation IPs, use PodIPs")
 		for _, ip := range ips {
 			podIPs = append(podIPs, ip.IP)
 		}
 	} else if ip := pod.Status.PodIP; ip != "" {
-		log.WithField("ip", ip).Debug("PodIP field filled in")
-		podIPs = append(podIPs, ip)
-	} else if ips := pod.Annotations[AnnotationPodIPs]; ips != "" {
-		log.WithField("ips", ips).Debug("No PodStatus IPs, use Calico plural annotation")
-		podIPs = append(podIPs, strings.Split(ips, ",")...)
-	} else if ip := pod.Annotations[AnnotationPodIP]; ip != "" {
-		log.WithField("ip", ip).Debug("No PodStatus IPs, use Calico singular annotation")
+               log.WithField("ip", ip).Debug("No Calico annotation IPs, use PodIP")
 		podIPs = append(podIPs, ip)
 	} else {
 		log.Debug("Pod has no IP")
